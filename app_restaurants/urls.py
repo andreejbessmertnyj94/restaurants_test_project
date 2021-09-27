@@ -1,24 +1,21 @@
-from django.urls import path
+from django.urls import include, path
+from rest_framework_nested import routers
 
-from .views import (
-    RestaurantListCreate,
-    RestaurantRetrieveUpdateDestroy,
-    RestaurantTicketListCreate,
-    RestaurantTicketRetrieveUpdateDestroy,
-    login,
-    signup,
+from .views import RestaurantTicketViewSet, RestaurantViewSet, login, signup
+
+router = routers.SimpleRouter()
+router.register(r"restaurants", RestaurantViewSet, basename="restaurant")
+
+tickets_router = routers.NestedSimpleRouter(router, r"restaurants", lookup="restaurant")
+tickets_router.register(
+    r"tickets",
+    RestaurantTicketViewSet,
+    basename="ticket",
 )
 
 urlpatterns = [
-    path("restaurants/", RestaurantListCreate.as_view()),
-    path("restaurants/<int:pk>/", RestaurantRetrieveUpdateDestroy.as_view()),
-    path(
-        "restaurants/<int:restaurant_id>/tickets/", RestaurantTicketListCreate.as_view()
-    ),
-    path(
-        "restaurants/<int:restaurant_id>/tickets/<int:pk>/",
-        RestaurantTicketRetrieveUpdateDestroy.as_view(),
-    ),
+    path("", include(router.urls)),
+    path("", include(tickets_router.urls)),
     # Auth
     path("signup/", signup),
     path("login/", login),

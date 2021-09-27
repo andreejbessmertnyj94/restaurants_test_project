@@ -2,7 +2,7 @@ from django.contrib.auth import authenticate
 from django.contrib.auth.models import User
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
-from rest_framework import generics, permissions, status
+from rest_framework import permissions, status, viewsets
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view
 from rest_framework.exceptions import NotFound, ParseError, PermissionDenied
@@ -63,34 +63,35 @@ def login(request):
         return Response({"token": str(token)}, status.HTTP_200_OK)
 
 
-class RestaurantListCreate(generics.ListCreateAPIView):
+class RestaurantViewSet(viewsets.ModelViewSet):
     serializer_class = RestaurantSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
+        if self.kwargs.get("pk"):
+            return Restaurant.objects.filter(
+                owner=self.request.user, pk=self.kwargs["pk"]
+            )
         return Restaurant.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
         serializer.save(owner=self.request.user)
 
 
-class RestaurantRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = RestaurantSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Restaurant.objects.filter(owner=self.request.user, pk=self.kwargs["pk"])
-
-
-class RestaurantTicketListCreate(generics.ListCreateAPIView):
+class RestaurantTicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
         try:
             restaurant = Restaurant.objects.get(
-                owner=self.request.user, pk=self.kwargs["restaurant_id"]
+                owner=self.request.user, pk=self.kwargs["restaurant_pk"]
             )
+            if self.kwargs.get("pk"):
+                return Ticket.objects.filter(
+                    restaurant=restaurant,
+                    pk=self.kwargs["pk"],
+                )
             return restaurant.tickets.all()
         except ObjectDoesNotExist:
             raise NotFound
@@ -98,25 +99,13 @@ class RestaurantTicketListCreate(generics.ListCreateAPIView):
     def perform_create(self, serializer):
         try:
             restaurant = Restaurant.objects.get(
-                owner=self.request.user, pk=self.kwargs["restaurant_id"]
+                owner=self.request.user, pk=self.kwargs["restaurant_pk"]
             )
             serializer.save(restaurant=restaurant)
         except ObjectDoesNotExist:
             raise PermissionDenied
         except (IntegrityError, OverflowError):
             raise ParseError
-
-
-class RestaurantTicketRetrieveUpdateDestroy(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = TicketSerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        return Ticket.objects.filter(
-            restaurant__owner=self.request.user,
-            restaurant_id=self.kwargs["restaurant_id"],
-            pk=self.kwargs["pk"],
-        )
 
     def perform_update(self, serializer):
         try:
